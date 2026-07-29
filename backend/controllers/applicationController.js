@@ -1,26 +1,36 @@
 const db = require('../config/db');
 
-// 1. Postuler à une offre de stage (Sans cv_url pour le moment)
+// 1. Postuler à une offre de stage (avec gestion du CV)
 exports.applyToJob = async (req, res) => {
   try {
     const { job_id, cover_letter } = req.body;
     const student_id = req.user.profile_id; // Récupéré via le Token JWT
 
+    // 1. Vérifier le rôle de l'utilisateur
     if (req.user.role !== 'student') {
       return res.status(403).json({ message: "Seuls les étudiants peuvent postuler à une offre." });
     }
 
+    // 2. Vérifier si l'ID du job est transmis
     if (!job_id) {
       return res.status(400).json({ message: "L'identifiant de l'offre (job_id) est obligatoire." });
     }
 
-    // Vérifier si l'offre existe
+    // 3. Vérifier qu'un fichier CV a bien été fourni par Multer
+    if (!req.file) {
+      return res.status(400).json({ message: "Veuillez joindre votre CV au format PDF." });
+    }
+
+    // 4. Construire le chemin d'accès au fichier
+    const cv_url = `/uploads/cvs/${req.file.filename}`;
+
+    // 5. Vérifier si l'offre existe
     const [jobExists] = await db.query('SELECT id FROM jobs WHERE id = ?', [job_id]);
     if (jobExists.length === 0) {
       return res.status(404).json({ message: "L'offre de stage spécifiée n'existe pas." });
     }
 
-    // Vérifier si l'étudiant a déjà postulé à cette offre
+    // 6. Vérifier si l'étudiant a déjà postulé à cette offre
     const [existing] = await db.query(
       'SELECT id FROM applications WHERE job_id = ? AND student_id = ?',
       [job_id, student_id]
@@ -30,22 +40,22 @@ exports.applyToJob = async (req, res) => {
       return res.status(400).json({ message: "Vous avez déjà postulé à cette offre." });
     }
 
-    // Enregistrer la candidature dans MySQL (sans cv_url)
+    // 7. Enregistrer la candidature dans MySQL avec le cv_url
     const [result] = await db.query(
-      'INSERT INTO applications (job_id, student_id, cover_letter) VALUES (?, ?, ?)',
-      [job_id, student_id, cover_letter || '']
+      'INSERT INTO applications (job_id, student_id, cover_letter, cv_url) VALUES (?, ?, ?, ?)',
+      [job_id, student_id, cover_letter || '', cv_url]
     );
 
     res.status(201).json({
       message: "Candidature envoyée avec succès !",
-      applicationId: result.insertId
+      applicationId: result.insertId,
+      cv_url: cv_url
     });
 
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
-
 // 2. Récupérer les candidatures de l'étudiant connecté
 exports.getStudentApplications = async (req, res) => {
   try {

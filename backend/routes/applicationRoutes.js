@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const applicationController = require('../controllers/applicationController');
 const authMiddleware = require('../middleware/authMiddleware');
+const upload = require('../middleware/uploadMiddleware');
 
-router.post('/', authMiddleware, applicationController.applyToJob);
+router.post('/', authMiddleware, upload.single('cv'), applicationController.applyToJob);
 router.get('/student', authMiddleware, applicationController.getStudentApplications);
 router.get('/company', authMiddleware, applicationController.getCompanyApplications);
 

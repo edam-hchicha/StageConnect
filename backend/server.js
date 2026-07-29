@@ -1,7 +1,7 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 require('dotenv').config();
-
 // Vérification connexion DB
 require('./config/db');
 
@@ -10,6 +10,8 @@ const app = express();
 // Middlewares
 app.use(cors());
 app.use(express.json());
+// 🆕 Rendre le dossier des uploads accessible via URL (ex: http://localhost:5000/uploads/cvs/...)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Importation des routes
 const authRoutes = require('./routes/authRoutes');
