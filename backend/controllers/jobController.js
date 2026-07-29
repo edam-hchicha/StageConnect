@@ -116,3 +116,41 @@ exports.deleteJob = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// Récupérer les offres avec recherche et filtres
+exports.getAllJobs = async (req, res) => {
+  try {
+    const { keyword, city, category } = req.query;
+
+    // Requête de base
+    let sql = 'SELECT * FROM jobs WHERE 1=1';
+    const params = [];
+
+    // 1. Filtre par mot-clé (cherche dans le titre ou la description)
+    if (keyword) {
+      sql += ' AND (title LIKE ? OR description LIKE ?)';
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+
+    // 2. Filtre par ville
+    if (city) {
+      sql += ' AND city LIKE ?';
+      params.push(`%${city}%`);
+    }
+
+    // 3. Filtre par catégorie
+    if (category) {
+      sql += ' AND category LIKE ?'; // Remplace par category_id si tu utilises un ID
+      params.push(`%${category}%`);
+    }
+
+    // Trier par la plus récente
+    sql += ' ORDER BY created_at DESC';
+
+    const [jobs] = await db.query(sql, params);
+
+    res.status(200).json(jobs);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
