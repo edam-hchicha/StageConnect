@@ -1,10 +1,11 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const sendVerificationEmail = require('../utils/sendEmail');
 
-// 1. INSCRIPTION (Register) avec Transaction SQL
+// 1. INSCRIPTION (Register) avec Génération de Token et Envoi d'Email
 exports.register = async (req, res) => {
-  // Obtenir une connexion pour gérer la transaction
   const connection = await db.getConnection();
 
   try {
@@ -15,28 +16,29 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "L'email, le mot de passe et le rôle sont obligatoires." });
     }
 
-    // Vérifier si le rôle est valide
     if (!['student', 'company'].includes(role)) {
       return res.status(400).json({ message: "Le rôle doit être 'student' ou 'company'." });
     }
 
-    // Début de la transaction SQL
     await connection.beginTransaction();
 
     // Vérifier si l'email existe déjà
     const [existingUser] = await connection.query('SELECT id FROM users WHERE email = ?', [email]);
     if (existingUser.length > 0) {
-      await connection.rollback(); // Annuler si l'email existe
+      await connection.rollback();
       return res.status(400).json({ message: "Cet email est déjà utilisé." });
     }
 
     // Hachage du mot de passe
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insertion dans la table `users`
+    // Génération d'un token aléatoire unique pour la vérification
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    // Insertion dans `users` avec is_verified = 0
     const [userResult] = await connection.query(
-      'INSERT INTO users (email, password, role) VALUES (?, ?, ?)',
-      [email, hashedPassword, role]
+      'INSERT INTO users (email, password, role, is_verified, verification_token) VALUES (?, ?, ?, 0, ?)',
+      [email, hashedPassword, role, verificationToken]
     );
     const userId = userResult.insertId;
 
@@ -53,22 +55,52 @@ exports.register = async (req, res) => {
       );
     }
 
-    // Valider la transaction si tout s'est bien passé
+    // Envoi de l'e-mail de vérification
+    await sendVerificationEmail(email, verificationToken);
+
     await connection.commit();
 
-    res.status(201).json({ message: "Compte créé avec succès !", userId });
+    res.status(201).json({
+      message: "Compte créé avec succès ! Un e-mail de confirmation vous a été envoyé.",
+      userId
+    });
 
   } catch (error) {
-    // En cas d'erreur, annuler toute modification en BDD
     await connection.rollback();
     res.status(500).json({ error: error.message });
   } finally {
-    // Libérer la connexion BDD
     connection.release();
   }
 };
 
-// 2. CONNEXION (Login) avec Récupération des IDs de profil
+// 2. VÉRIFICATION DE L'EMAIL (Validation du compte)
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ message: "Token de vérification manquant." });
+    }
+
+    const [users] = await db.query('SELECT id FROM users WHERE verification_token = ?', [token]);
+    if (users.length === 0) {
+      return res.status(400).json({ message: "Token invalide ou expiré." });
+    }
+
+    // Activer le compte et supprimer le token
+    await db.query(
+      'UPDATE users SET is_verified = 1, verification_token = NULL WHERE id = ?',
+      [users[0].id]
+    );
+
+    res.status(200).json({ message: "Votre adresse e-mail a été vérifiée avec succès. Vous pouvez maintenant vous connecter !" });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 3. CONNEXION (Login) avec vérification de l'état du compte
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -77,7 +109,6 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Veuillez fournir un email et un mot de passe." });
     }
 
-    // Récupérer l'utilisateur
     const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
     if (users.length === 0) {
       return res.status(401).json({ message: "Email ou mot de passe incorrect." });
@@ -85,13 +116,18 @@ exports.login = async (req, res) => {
 
     const user = users[0];
 
-    // Vérification du mot de passe
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Email ou mot de passe incorrect." });
     }
 
-    // Récupérer le profile_id correspondant au rôle
+    // Vérifier si l'utilisateur a confirmé son e-mail
+    if (!user.is_verified) {
+      return res.status(403).json({
+        message: "Veuillez vérifier votre adresse e-mail avant de vous connecter."
+      });
+    }
+
     let profileId = null;
     if (user.role === 'student') {
       const [student] = await db.query('SELECT id FROM student_profiles WHERE user_id = ?', [user.id]);
@@ -101,7 +137,6 @@ exports.login = async (req, res) => {
       if (company.length > 0) profileId = company[0].id;
     }
 
-    // Génération du Token JWT (on inclut profile_id dans le payload)
     const token = jwt.sign(
       { id: user.id, profile_id: profileId, role: user.role },
       process.env.JWT_SECRET || 'secret_de_secours',
