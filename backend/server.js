@@ -2,7 +2,8 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 require('dotenv').config();
-// Vérification connexion DB
+
+// Connexion BDD
 require('./config/db');
 
 const app = express();
@@ -10,7 +11,9 @@ const app = express();
 // Middlewares
 app.use(cors());
 app.use(express.json());
-// 🆕 Rendre le dossier des uploads accessible via URL (ex: http://localhost:5000/uploads/cvs/...)
+app.use(express.urlencoded({ extended: true }));
+
+// Accès public aux fichiers téléversés (CVs)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Importation des routes
@@ -25,7 +28,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 
-// Route de test
+// Route de santé
 app.get('/', (req, res) => {
   res.send('API StageConnect opérationnelle ! 🚀');
 });

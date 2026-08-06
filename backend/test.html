@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Test StageConnect</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; background: #f8f9fa; }
+    .card { max-width: 550px; margin: 0 auto 20px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    input, button { display: block; width: 100%; margin-bottom: 12px; padding: 10px; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; font-size: 15px; border-radius: 4px; }
+    button.green { background-color: #28a745; }
+    pre { background: #272822; color: #f8f8f2; padding: 12px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+
+  <!-- Étape 1 : Upload CV -->
+  <div class="card">
+    <h2>1. Téléverser le CV 📄</h2>
+    <label>Token JWT (étudiant) :</label>
+    <input type="text" id="token" placeholder="Collez votre Token JWT ici">
+
+    <label>Fichier CV (PDF) :</label>
+    <input type="file" id="cvFile" accept="application/pdf">
+
+    <button onclick="uploadCV()">Envoyer le CV</button>
+  </div>
+
+  <!-- Étape 2 : Match IA -->
+  <div class="card">
+    <h2>2. Tester le Match IA 🤖</h2>
+    <label>ID de l'offre (jobId) :</label>
+    <input type="number" id="jobId" value="1">
+
+    <button class="green" onclick="testMatch()">Calculer la compatibilité IA</button>
+  </div>
+
+  <!-- Affichage des résultats -->
+  <div class="card">
+    <h3>Résultat du serveur :</h3>
+    <pre id="result">En attente d'action...</pre>
+  </div>
+
+  <script>
+    async function uploadCV() {
+      const token = document.getElementById('token').value.trim();
+      const fileInput = document.getElementById('cvFile');
+      const resultDiv = document.getElementById('result');
+
+      if (!token || fileInput.files.length === 0) {
+        alert('Veuillez fournir le token ET le fichier PDF.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('cv', fileInput.files[0]);
+      resultDiv.textContent = 'Envoi du CV...';
+
+      try {
+        const res = await fetch('http://localhost:5000/api/jobs/upload-cv', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: formData
+        });
+        const data = await res.json();
+        resultDiv.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resultDiv.textContent = 'Erreur : ' + err.message;
+      }
+    }
+
+    async function testMatch() {
+      const token = document.getElementById('token').value.trim();
+      const jobId = document.getElementById('jobId').value;
+      const resultDiv = document.getElementById('result');
+
+      if (!token || !jobId) {
+        alert('Veuillez fournir le token et un ID d\'offre valide.');
+        return;
+      }
+
+      resultDiv.textContent = 'Analyse de l\'IA en cours... (patienter quelques secondes)';
+
+      try {
+        const res = await fetch(`http://localhost:5000/api/jobs/${jobId}/match`, {
+          method: 'GET',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        resultDiv.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resultDiv.textContent = 'Erreur : ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
