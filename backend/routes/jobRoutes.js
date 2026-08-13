@@ -6,15 +6,16 @@ const matchController = require('../controllers/matchController');
 const authMiddleware = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
+// --- ROUTE ENTREPRISE (Mes offres) ---
+// ⚠️ À placer OBLIGATOIREMENT avant /:id
+router.get('/company/me', authMiddleware, jobController.getCompanyJobs);
+
 // --- ROUTES PUBLIQUES ---
 router.get('/', jobController.getAllJobs);
 router.get('/:id', jobController.getJobById);
 
 // --- ROUTES ÉTUDIANT (IA & CV) ---
-// Upload du CV en PDF
 router.post('/upload-cv', authMiddleware, upload.single('cv'), matchController.uploadCv);
-
-// Calcul de compatibilité IA pour une offre spécifique
 router.get('/:jobId/match', authMiddleware, matchController.getMatchWithJob);
 
 // --- ROUTES RECRUTEUR / ADMIN ---

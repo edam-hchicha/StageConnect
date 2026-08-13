@@ -56,6 +56,7 @@ exports.applyToJob = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 // 2. Récupérer les candidatures de l'étudiant connecté
 exports.getStudentApplications = async (req, res) => {
   try {
@@ -66,7 +67,7 @@ exports.getStudentApplications = async (req, res) => {
     }
 
     const [applications] = await db.query(
-      `SELECT a.id, a.status, a.created_at, j.title, j.location, c.company_name 
+      `SELECT a.id, a.job_id, a.status, a.created_at, j.title, j.location, c.company_name 
        FROM applications a
        JOIN jobs j ON a.job_id = j.id
        JOIN company_profiles c ON j.company_id = c.id
@@ -81,7 +82,7 @@ exports.getStudentApplications = async (req, res) => {
   }
 };
 
-// 3. Récupérer les candidatures reçues par l'entreprise
+// 3. Récupérer les candidatures reçues par l'entreprise (Inclus cv_url)
 exports.getCompanyApplications = async (req, res) => {
   try {
     const company_id = req.user.profile_id;
@@ -91,7 +92,7 @@ exports.getCompanyApplications = async (req, res) => {
     }
 
     const [applications] = await db.query(
-      `SELECT a.id, a.status, a.cover_letter, a.created_at, 
+      `SELECT a.id, a.status, a.cover_letter, a.cv_url, a.created_at, 
               j.title AS job_title, s.first_name, s.last_name, u.email
        FROM applications a
        JOIN jobs j ON a.job_id = j.id

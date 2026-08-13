@@ -1,14 +1,34 @@
 const db = require('../config/db');
 
-// 1. Récupérer TOUTES les offres de stage (Public)
+// 1. Récupérer TOUTES les offres de stage (Public + Recherche & Filtres)
 exports.getAllJobs = async (req, res) => {
   try {
-    const [jobs] = await db.query(
-      `SELECT j.*, c.company_name, c.sector 
-       FROM jobs j 
-       JOIN company_profiles c ON j.company_id = c.id 
-       ORDER BY j.created_at DESC`
-    );
+    const { keyword, location, city } = req.query;
+    const searchLocation = location || city;
+
+    let sql = `
+      SELECT j.*, c.company_name, c.sector 
+      FROM jobs j 
+      JOIN company_profiles c ON j.company_id = c.id 
+      WHERE 1=1
+    `;
+    const params = [];
+
+    // Filtre par mot-clé (cherche dans le titre ou la description)
+    if (keyword && keyword.trim() !== '') {
+      sql += ' AND (j.title LIKE ? OR j.description LIKE ?)';
+      params.push(`%${keyword.trim()}%`, `%${keyword.trim()}%`);
+    }
+
+    // Filtre par localisation/ville (sur la colonne j.location)
+    if (searchLocation && searchLocation.trim() !== '') {
+      sql += ' AND j.location LIKE ?';
+      params.push(`%${searchLocation.trim()}%`);
+    }
+
+    sql += ' ORDER BY j.created_at DESC';
+
+    const [jobs] = await db.query(sql, params);
     res.status(200).json(jobs);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -116,40 +136,21 @@ exports.deleteJob = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-// Récupérer les offres avec recherche et filtres
-exports.getAllJobs = async (req, res) => {
+// 6. Récupérer UNIQUEMENT les offres de l'entreprise connectée (Protégée)
+exports.getCompanyJobs = async (req, res) => {
   try {
-    const { keyword, city, category } = req.query;
+    const company_id = req.user.profile_id;
 
-    // Requête de base
-    let sql = 'SELECT * FROM jobs WHERE 1=1';
-    const params = [];
-
-    // 1. Filtre par mot-clé (cherche dans le titre ou la description)
-    if (keyword) {
-      sql += ' AND (title LIKE ? OR description LIKE ?)';
-      params.push(`%${keyword}%`, `%${keyword}%`);
+    if (req.user.role !== 'company') {
+      return res.status(403).json({ message: "Accès refusé. Seules les entreprises peuvent voir leurs offres." });
     }
 
-    // 2. Filtre par ville
-    if (city) {
-      sql += ' AND city LIKE ?';
-      params.push(`%${city}%`);
-    }
-
-    // 3. Filtre par catégorie
-    if (category) {
-      sql += ' AND category LIKE ?'; // Remplace par category_id si tu utilises un ID
-      params.push(`%${category}%`);
-    }
-
-    // Trier par la plus récente
-    sql += ' ORDER BY created_at DESC';
-
-    const [jobs] = await db.query(sql, params);
+    const [jobs] = await db.query(
+      `SELECT * FROM jobs WHERE company_id = ? ORDER BY created_at DESC`,
+      [company_id]
+    );
 
     res.status(200).json(jobs);
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
