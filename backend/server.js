@@ -21,12 +21,14 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
+const profileRoutes = require('./routes/profileRoutes');
 
 // Déclaration des endpoints API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
+app.use('/api/profile', profileRoutes);
 
 // Route de santé
 app.get('/', (req, res) => {

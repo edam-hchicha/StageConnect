@@ -142,3 +142,57 @@ exports.updateApplicationStatus = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// Importer la nouvelle fonction d'envoi d'e-mail
+const { sendApplicationResponseEmail } = require('../utils/sendEmail');
+exports.respondToApplication = async (req, res) => {
+  try {
+    const { id } = req.params; // ID de la candidature
+    const { status, interviewDate, notes } = req.body; 
+    // status = 'accepted' ou 'rejected'
+
+    // 1. Récupérer les informations du candidat, de l'offre et de l'entreprise
+const [rows] = await db.query(
+  `SELECT 
+     a.id,
+     u.email AS student_email, 
+     CONCAT(sp.first_name, ' ', sp.last_name) AS student_name,
+     j.title AS job_title, 
+     cp.company_name
+   FROM applications a
+   JOIN users u ON a.student_id = u.id
+   JOIN student_profiles sp ON sp.user_id = u.id
+   JOIN jobs j ON a.job_id = j.id
+   JOIN company_profiles cp ON cp.user_id = j.company_id
+   WHERE a.id = ?`,
+  [id]
+);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Candidature introuvable." });
+    }
+
+    const app = rows[0];
+
+    // 2. Mettre à jour le statut en BDD
+    await db.query(
+      'UPDATE applications SET status = ?, notes = ?, interview_date = ? WHERE id = ?',
+      [status, notes || '', interviewDate || null, id]
+    );
+
+    // 3. Envoyer l'e-mail automatique
+    await sendApplicationResponseEmail({
+      studentEmail: app.student_email,
+      studentName: app.student_name,
+      jobTitle: app.job_title,
+      companyName: app.company_name,
+      status: status,
+      interviewDate: interviewDate,
+      notes: notes
+    });
+
+    res.status(200).json({ message: "Réponse envoyée et candidat notifié par e-mail !" });
+  } catch (error) {
+    console.error("Erreur lors de l'envoi de la réponse :", error);
+    res.status(500).json({ error: error.message });
+  }
+};

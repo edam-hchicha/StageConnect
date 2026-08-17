@@ -6,7 +6,13 @@ const API = axios.create({
     'Content-Type': 'application/json',
   },
 });
-
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 // ⚡ FIX : INTERCEPTEUR POUR INJECTER AUTOMATIQUEMENT LE TOKEN JWT
 API.interceptors.request.use(
   (config) => {
@@ -49,7 +55,7 @@ export const verifyEmail = (verificationData) => {
 
 // --- OFFRES DE STAGE ---
 export const getAllJobs = (filters = {}) => API.get('/jobs', { params: filters });
-export const getCompanyJobs = () => API.get('/jobs/company');
+export const getCompanyJobs = () => API.get('/jobs/company/me');
 export const getJobById = (id) => API.get(`/jobs/${id}`);
 export const createJob = (jobData) => API.post('/jobs', jobData);
 export const updateJob = (id, jobData) => API.put(`/jobs/${id}`, jobData);
@@ -63,5 +69,4 @@ export const applyToJob = (formData) => API.post('/applications', formData, {
 export const getStudentApplications = () => API.get('/applications/student');
 export const getCompanyApplications = () => API.get('/applications/company');
 export const updateApplicationStatus = (id, status) => API.put(`/applications/${id}/status`, { status });
-
 export default API;

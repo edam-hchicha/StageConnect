@@ -10,5 +10,5 @@ router.get('/company', authMiddleware, applicationController.getCompanyApplicati
 
 // Route pour qu'une entreprise accepte/refuse un candidat
 router.put('/:id/status', authMiddleware, applicationController.updateApplicationStatus);
-
+router.put('/:id/respond', authMiddleware, applicationController.respondToApplication);
 module.exports = router;

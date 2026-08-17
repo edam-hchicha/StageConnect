@@ -141,12 +141,8 @@ exports.getCompanyJobs = async (req, res) => {
   try {
     const company_id = req.user.profile_id;
 
-    if (req.user.role !== 'company') {
-      return res.status(403).json({ message: "Accès refusé. Seules les entreprises peuvent voir leurs offres." });
-    }
-
     const [jobs] = await db.query(
-      `SELECT * FROM jobs WHERE company_id = ? ORDER BY created_at DESC`,
+      'SELECT * FROM jobs WHERE company_id = ? ORDER BY created_at DESC',
       [company_id]
     );
 

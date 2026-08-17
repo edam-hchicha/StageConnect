@@ -22,5 +22,6 @@ router.get('/:jobId/match', authMiddleware, matchController.getMatchWithJob);
 router.post('/', authMiddleware, jobController.createJob);
 router.put('/:id', authMiddleware, jobController.updateJob);
 router.delete('/:id', authMiddleware, jobController.deleteJob);
-
+//affichage ds offres pour company
+router.get('/company/me', authMiddleware, jobController.getCompanyJobs);
 module.exports = router;

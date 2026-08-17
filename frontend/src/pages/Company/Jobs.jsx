@@ -1,7 +1,24 @@
-import React, { useEffect, useState } from 'react';
-// 1. Remplacement de getAllJobs par getCompanyJobs
+import React, { useEffect, useMemo, useState } from 'react';
 import { getCompanyJobs, createJob, updateJob, deleteJob } from '../../services/api';
 import { Link } from 'react-router-dom';
+import {
+  Briefcase, Plus, Inbox, MapPin, Clock, Pencil, Trash2, X, MapPinned, PackageOpen,
+} from 'lucide-react';
+
+const theme = {
+  canvas: '#F5F6F3',
+  ink: '#122621',
+  inkSoft: '#3E4F49',
+  muted: '#657A73',
+  primary: '#1E6F58',
+  primaryDark: '#154C3D',
+  primaryTint: '#E6F1EC',
+  amber: '#B9752B',
+  amberTint: '#FBF0E1',
+  danger: '#9C4238',
+  dangerTint: '#F8ECEA',
+  border: '#E1E5E0',
+};
 
 const CompanyJobs = () => {
   const [jobs, setJobs] = useState([]);
@@ -9,22 +26,20 @@ const CompanyJobs = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingJobId, setEditingJobId] = useState(null);
 
-  // Formulaire pour Créer / Modifier une offre
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     location: '',
-    duration: ''
+    duration: '',
   });
 
-  // 2. Récupération uniquement des offres appartenant à l'entreprise
   const fetchCompanyJobs = async () => {
     setLoading(true);
     try {
       const res = await getCompanyJobs();
       setJobs(res.data);
     } catch (err) {
-      console.error("Erreur lors de la récupération des offres :", err);
+      console.error('Erreur lors de la récupération des offres :', err);
     } finally {
       setLoading(false);
     }
@@ -34,208 +49,311 @@ const CompanyJobs = () => {
     fetchCompanyJobs();
   }, []);
 
-  // Ouvrir la modale pour Ajouter une offre
+  const stats = useMemo(() => {
+    const uniqueLocations = new Set(
+      jobs.map((j) => (j.location || '').trim().toLowerCase()).filter(Boolean)
+    );
+    return { total: jobs.length, locations: uniqueLocations.size };
+  }, [jobs]);
+
   const handleOpenCreateModal = () => {
     setEditingJobId(null);
     setFormData({ title: '', description: '', location: '', duration: '' });
     setShowModal(true);
   };
 
-  // Ouvrir la modale pour Modifier une offre
   const handleOpenEditModal = (job) => {
     setEditingJobId(job.id);
     setFormData({
       title: job.title || '',
       description: job.description || '',
       location: job.location || '',
-      duration: job.duration || ''
+      duration: job.duration || '',
     });
     setShowModal(true);
   };
 
-  // Soumission du formulaire (Création ou Modification)
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       if (editingJobId) {
         await updateJob(editingJobId, formData);
-        alert("🎉 Offre modifiée avec succès !");
+        alert('Offre modifiée avec succès.');
       } else {
         await createJob(formData);
-        alert("🎉 Offre publiée avec succès !");
+        alert('Offre publiée avec succès.');
       }
       setShowModal(false);
       fetchCompanyJobs();
     } catch (err) {
-      alert(err.response?.data?.message || "Une erreur est survenue.");
+      alert(err.response?.data?.message || 'Une erreur est survenue.');
     }
   };
 
-  // Supprimer une offre
   const handleDelete = async (id) => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer cette offre ?")) {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette offre ?')) {
       try {
         await deleteJob(id);
-        setJobs(jobs.filter(job => job.id !== id));
-        alert("Offre supprimée.");
+        setJobs(jobs.filter((job) => job.id !== id));
       } catch (err) {
-        alert("Erreur lors de la suppression.");
+        alert('Erreur lors de la suppression.');
       }
     }
   };
 
-  return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* En-tête avec Actions Entreprise */}
-      <div className="flex justify-between items-center flex-wrap gap-4 border-b pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion de mes Offres de Stage</h1>
-          <p className="text-sm text-gray-500">Créez et gérez vos annonces pour recruter des stagiaires.</p>
-        </div>
-
-        <div className="flex gap-3">
-          <Link
-            to="/company/applications"
-            className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-semibold rounded-lg border border-indigo-200 transition"
-          >
-            📥 Voir les Candidatures Reçues
-          </Link>
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
-          >
-            ➕ Publier une Offre
-          </button>
-        </div>
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4" style={{ backgroundColor: theme.canvas, fontFamily: "'Inter', sans-serif" }}>
+        <div className="h-9 w-9 rounded-full animate-spin" style={{ border: `2.5px solid ${theme.border}`, borderTopColor: theme.primary }} />
+        <p className="text-sm font-medium" style={{ color: theme.muted }}>Chargement de vos offres…</p>
       </div>
+    );
+  }
 
-      {/* Liste des Offres Publiées par l'Entreprise */}
-      {loading ? (
-        <p className="text-center py-8 text-gray-500">Chargement de vos offres...</p>
-      ) : jobs.length === 0 ? (
-        <div className="bg-white p-8 rounded-lg text-center border shadow-sm">
-          <p className="text-gray-500 mb-4">Vous n'avez encore publié aucune offre de stage.</p>
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-          >
-            Publier votre première offre
-          </button>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {jobs.map((job) => (
-            <div key={job.id} className="bg-white p-5 rounded-lg border shadow-sm flex flex-col justify-between space-y-4">
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  <h2 className="text-lg font-bold text-gray-800">{job.title}</h2>
-                  {job.duration && (
-                    <span className="bg-blue-50 text-blue-700 text-xs font-semibold px-2 py-1 rounded">
-                      ⏱️ {job.duration}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 font-medium mb-2">📍 Ville : {job.location || 'Non renseignée'}</p>
-                <p className="text-gray-600 text-sm line-clamp-3">{job.description}</p>
-              </div>
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: theme.canvas, fontFamily: "'Inter', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+        .sc-display { font-family: 'Sora', sans-serif; }
+        .sc-card { position: relative; overflow: hidden; }
+        .sc-divider { position: relative; border-top: 1.5px dashed ${theme.border}; margin: 0 -1.5rem; }
+        .sc-divider::before, .sc-divider::after {
+          content: ''; position: absolute; top: -8px; width: 16px; height: 16px;
+          border-radius: 999px; background: ${theme.canvas};
+        }
+        .sc-divider::before { left: -8px; }
+        .sc-divider::after { right: -8px; }
+        .sc-input:focus { outline: none; border-color: ${theme.primary}; box-shadow: 0 0 0 3px ${theme.primaryTint}; }
+        .sc-fade-in { animation: scFadeIn .16s ease-out; }
+        @keyframes scFadeIn { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+      `}</style>
 
-              {/* Actions réservées à l'Entreprise */}
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <button
-                  onClick={() => handleOpenEditModal(job)}
-                  className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded hover:bg-gray-200 transition"
-                >
-                  ✏️ Modifier
-                </button>
-                <button
-                  onClick={() => handleDelete(job.id)}
-                  className="px-3 py-1.5 bg-red-50 text-red-600 text-xs font-semibold rounded hover:bg-red-100 transition"
-                >
-                  🗑️ Supprimer
-                </button>
-              </div>
+      <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8 space-y-8">
+        <div className="rounded-2xl p-7 flex flex-col md:flex-row md:items-center justify-between gap-5" style={{ backgroundColor: theme.primaryDark }}>
+          <div className="flex items-start gap-4">
+            <div className="hidden sm:flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}>
+              <Briefcase className="w-6 h-6" style={{ color: '#F2E9D8' }} />
             </div>
-          ))}
-        </div>
-      )}
+            <div>
+              <h1 className="sc-display text-2xl font-bold text-white tracking-tight">Gestion de mes offres de stage</h1>
+              <p className="text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.72)' }}>
+                Publiez, modifiez et suivez vos annonces pour recruter vos futurs stagiaires.
+              </p>
+            </div>
+          </div>
 
-      {/* MODALE DE CRÉATION / MODIFICATION */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4 z-50">
-          <div className="bg-white p-6 rounded-xl shadow-xl max-w-lg w-full space-y-4">
-            <h3 className="text-xl font-bold text-gray-800">
-              {editingJobId ? "✏️ Modifier l'Offre" : "➕ Publier une Nouvelle Offre"}
-            </h3>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Titre du poste *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex: Développeur Fullstack React / Node"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville / Lieu *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ex: Tunis, Sfax..."
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Durée *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ex: 3 mois, 6 mois"
-                    value={formData.duration}
-                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                    className="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description du poste *</label>
-                <textarea
-                  rows="4"
-                  required
-                  placeholder="Missions, technologies utilisées, profil recherché..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-                >
-                  {editingJobId ? "Mettre à jour" : "Publier l'offre"}
-                </button>
-              </div>
-            </form>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to="/company/applications"
+              className="px-4 py-2.5 text-xs font-semibold rounded-xl transition flex items-center gap-2"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: '#FFFFFF' }}
+            >
+              <Inbox className="w-4 h-4" />
+              <span>Candidatures reçues</span>
+            </Link>
+            <button
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2.5 text-xs font-semibold rounded-xl transition flex items-center gap-2 cursor-pointer"
+              style={{ backgroundColor: theme.amber, color: '#2A1B08' }}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Publier une offre</span>
+            </button>
           </div>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white p-5 rounded-2xl flex items-center gap-4" style={{ border: `1px solid ${theme.border}` }}>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: theme.primaryTint, color: theme.primary }}>
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>Offres publiées</p>
+              <p className="sc-display text-xl font-bold" style={{ color: theme.ink }}>{stats.total}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl flex items-center gap-4" style={{ border: `1px solid ${theme.border}` }}>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: theme.amberTint, color: theme.amber }}>
+              <MapPinned className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>Villes couvertes</p>
+              <p className="sc-display text-xl font-bold" style={{ color: theme.ink }}>{stats.locations}</p>
+            </div>
+          </div>
+        </div>
+
+        {jobs.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 text-center max-w-md mx-auto" style={{ border: `1px solid ${theme.border}` }}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: theme.primaryTint, color: theme.primary }}>
+              <PackageOpen className="w-7 h-7" />
+            </div>
+            <h3 className="sc-display text-lg font-bold mb-1.5" style={{ color: theme.ink }}>Aucune offre publiée</h3>
+            <p className="text-sm mb-6" style={{ color: theme.muted }}>
+              Vous n'avez pas encore créé d'offre de stage. Votre première annonce n'attend qu'à être publiée.
+            </p>
+            <button
+              onClick={handleOpenCreateModal}
+              className="px-5 py-2.5 text-xs font-semibold rounded-xl transition cursor-pointer"
+              style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
+            >
+              Publier votre première offre
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {jobs.map((job) => (
+              <div
+                key={job.id}
+                className="sc-card bg-white rounded-2xl p-6 flex flex-col justify-between"
+                style={{ border: `1px solid ${theme.border}`, borderLeft: `4px solid ${theme.primary}` }}
+              >
+                <div className="space-y-3.5">
+                  <div className="flex justify-between items-start gap-2">
+                    <h2 className="sc-display text-base font-bold leading-snug line-clamp-2" style={{ color: theme.ink }}>{job.title}</h2>
+                    {job.duration && (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ backgroundColor: theme.amberTint, color: theme.amber }}>
+                        <Clock className="w-3 h-3" />
+                        {job.duration}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: theme.muted }}>
+                    <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                    {job.location || 'Localisation non renseignée'}
+                  </p>
+                </div>
+
+                <div className="sc-divider mt-4 pt-4">
+                  <p className="text-xs leading-relaxed line-clamp-3" style={{ color: theme.inkSoft }}>{job.description}</p>
+                </div>
+
+                <div className="flex items-center gap-2 mt-5 pt-4" style={{ borderTop: `1px solid ${theme.border}` }}>
+                  <button
+                    onClick={() => handleOpenEditModal(job)}
+                    className="flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    Modifier
+                  </button>
+                  <button
+                    onClick={() => handleDelete(job.id)}
+                    className="py-2 px-3 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    style={{ backgroundColor: theme.dangerTint, color: theme.danger }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {showModal && (
+          <div className="fixed inset-0 flex justify-center items-center p-4 z-50" style={{ backgroundColor: 'rgba(18, 38, 33, 0.55)' }}>
+            <div className="sc-fade-in bg-white rounded-2xl max-w-lg w-full overflow-hidden">
+              <div className="px-6 py-5 flex justify-between items-center" style={{ backgroundColor: theme.primaryDark }}>
+                <h3 className="sc-display text-base font-bold text-white flex items-center gap-2.5">
+                  {editingJobId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {editingJobId ? "Modifier l'offre" : 'Publier une nouvelle offre'}
+                </h3>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer"
+                  style={{ color: 'rgba(255,255,255,0.75)', backgroundColor: 'rgba(255,255,255,0.08)' }}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.inkSoft }}>
+                    Titre du poste <span style={{ color: theme.danger }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: Développeur Fullstack React / Node"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="sc-input w-full px-3.5 py-2.5 rounded-xl text-sm transition"
+                    style={{ border: `1px solid ${theme.border}` }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.inkSoft }}>
+                      Ville / Lieu <span style={{ color: theme.danger }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ex: Tunis, Sfax…"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="sc-input w-full px-3.5 py-2.5 rounded-xl text-sm transition"
+                      style={{ border: `1px solid ${theme.border}` }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.inkSoft }}>
+                      Durée <span style={{ color: theme.danger }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ex: 3 mois, 6 mois"
+                      value={formData.duration}
+                      onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                      className="sc-input w-full px-3.5 py-2.5 rounded-xl text-sm transition"
+                      style={{ border: `1px solid ${theme.border}` }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.inkSoft }}>
+                    Description du poste <span style={{ color: theme.danger }}>*</span>
+                  </label>
+                  <textarea
+                    rows="4"
+                    required
+                    placeholder="Missions, technologies utilisées, profil recherché…"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="sc-input w-full px-3.5 py-2.5 rounded-xl text-sm transition resize-none"
+                    style={{ border: `1px solid ${theme.border}` }}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4" style={{ borderTop: `1px solid ${theme.border}` }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold transition"
+                    style={{ border: `1px solid ${theme.border}`, color: theme.inkSoft }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 text-xs font-semibold rounded-xl transition"
+                    style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
+                  >
+                    {editingJobId ? 'Mettre à jour' : "Publier l'offre"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
