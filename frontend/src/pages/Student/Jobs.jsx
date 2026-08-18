@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getAllJobs, applyToJob, getStudentApplications } from '../../services/api';
+import { getStudentJobs, applyToJob, getStudentApplications } from '../../services/api';
 import { Link } from 'react-router-dom';
 import {
   Search, MapPin, Clock, Sparkles, ClipboardList, Building2,
-  CheckCircle2, FileUp, X, Send, Loader2,
+  CheckCircle2, FileUp, X, Send, Loader2, Tag, Percent
 } from 'lucide-react';
 
 const theme = {
@@ -19,6 +19,19 @@ const theme = {
   border: '#E1E5E0',
 };
 
+// Helper pour parser les compétences (Tableau JS ou chaîne JSON/virgules)
+const parseSkills = (skillsData) => {
+  if (!skillsData) return [];
+  if (Array.isArray(skillsData)) return skillsData;
+  try {
+    const parsed = JSON.parse(skillsData);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // Si ce n'est pas du JSON, on découpe par virgule
+  }
+  return String(skillsData).split(',').map((s) => s.trim()).filter(Boolean);
+};
+
 const StudentJobs = () => {
   const [jobs, setJobs] = useState([]);
   const [appliedJobIds, setAppliedJobIds] = useState([]);
@@ -30,15 +43,16 @@ const StudentJobs = () => {
   const [cvFile, setCvFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Charger les offres personnalisées par l'IA et les candidatures existantes
   const fetchJobsAndApplications = async () => {
     setLoading(true);
     try {
       const [jobsRes, appsRes] = await Promise.all([
-        getAllJobs(search),
+        getStudentJobs(), // Utilise la route IA avec calcul de matchScore et tri
         getStudentApplications().catch(() => ({ data: [] })),
       ]);
-      setJobs(jobsRes.data);
-      setAppliedJobIds(appsRes.data.map((app) => app.job_id));
+      setJobs(jobsRes.data || []);
+      setAppliedJobIds((appsRes.data || []).map((app) => app.job_id));
     } catch (err) {
       console.error('Erreur de chargement :', err);
     } finally {
@@ -47,11 +61,23 @@ const StudentJobs = () => {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchJobsAndApplications();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search.keyword, search.location]);
+    fetchJobsAndApplications();
+  }, []);
+
+  // Filtrage local dynamique réactif
+  const filteredJobs = jobs.filter((job) => {
+    const matchesKeyword =
+      !search.keyword.trim() ||
+      job.title?.toLowerCase().includes(search.keyword.toLowerCase()) ||
+      job.description?.toLowerCase().includes(search.keyword.toLowerCase()) ||
+      job.company_name?.toLowerCase().includes(search.keyword.toLowerCase());
+
+    const matchesLocation =
+      !search.location.trim() ||
+      job.location?.toLowerCase().includes(search.location.toLowerCase());
+
+    return matchesKeyword && matchesLocation;
+  });
 
   const handleApplySubmit = async (e) => {
     e.preventDefault();
@@ -101,19 +127,20 @@ const StudentJobs = () => {
       `}</style>
 
       <div className="max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8 space-y-7">
+        {/* En-tête */}
         <div className="flex justify-between items-center flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: theme.primaryTint, color: theme.primary }}>
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="sc-display text-2xl font-bold" style={{ color: theme.ink }}>Offres de stage disponibles</h1>
-              <p className="text-xs mt-0.5" style={{ color: theme.muted }}>Recherche intelligente parmi les offres publiées par nos entreprises partenaires.</p>
+              <h1 className="sc-display text-2xl font-bold" style={{ color: theme.ink }}>Offres recommandées par IA</h1>
+              <p className="text-xs mt-0.5" style={{ color: theme.muted }}>Offres triées selon la compatibilité avec votre profil et vos compétences.</p>
             </div>
           </div>
           <Link
             to="/student/applications"
-            className="px-4 py-2.5 text-xs font-semibold rounded-xl transition flex items-center gap-2"
+            className="px-4 py-2.5 text-xs font-semibold rounded-xl transition flex items-center gap-2 cursor-pointer"
             style={{ backgroundColor: theme.primaryDark, color: '#FFFFFF' }}
           >
             <ClipboardList className="w-4 h-4" />
@@ -121,12 +148,13 @@ const StudentJobs = () => {
           </Link>
         </div>
 
+        {/* Barre de recherche et de filtres */}
         <div className="flex flex-wrap gap-4 bg-white p-4 rounded-2xl" style={{ border: `1px solid ${theme.border}` }}>
           <div className="relative flex-1 min-w-[220px]">
             <Search className="w-4.5 h-4.5 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: theme.muted }} />
             <input
               type="text"
-              placeholder="Recherche par poste (ex: React, Node...)"
+              placeholder="Recherche par poste ou compétence (ex: React, Node...)"
               value={search.keyword}
               onChange={(e) => setSearch({ ...search, keyword: e.target.value })}
               className="sc-input w-full pl-11 pr-3 py-2.5 rounded-xl text-sm transition"
@@ -146,49 +174,89 @@ const StudentJobs = () => {
           </div>
         </div>
 
+        {/* Liste des offres */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-9 h-9 rounded-full animate-spin" style={{ border: `2.5px solid ${theme.border}`, borderTopColor: theme.primary }} />
-            <p className="text-sm" style={{ color: theme.muted }}>Recherche en cours…</p>
+            <p className="text-sm" style={{ color: theme.muted }}>Calcul du matching IA des offres en cours…</p>
           </div>
-        ) : jobs.length === 0 ? (
+        ) : filteredJobs.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center max-w-md mx-auto" style={{ border: `1px solid ${theme.border}` }}>
             <p className="text-sm" style={{ color: theme.muted }}>Aucune offre ne correspond à votre recherche.</p>
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2">
-            {jobs.map((job) => {
+            {filteredJobs.map((job) => {
               const hasApplied = appliedJobIds.includes(job.id);
+              const skillsList = parseSkills(job.skills);
+              const matchScore = job.matchScore !== undefined ? job.matchScore : 0;
+
               return (
                 <div
                   key={job.id}
-                  className="sc-card bg-white rounded-2xl p-6 flex flex-col justify-between"
+                  className="sc-card bg-white rounded-2xl p-6 flex flex-col justify-between space-y-4"
                   style={{ border: `1px solid ${theme.border}`, borderLeft: `4px solid ${theme.primary}` }}
                 >
                   <div className="space-y-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <h2 className="sc-display text-base font-bold leading-snug" style={{ color: theme.ink }}>{job.title}</h2>
+                    {/* Badge Matching IA & Durée */}
+                    <div className="flex justify-between items-center gap-2 flex-wrap">
+                      {matchScore > 0 && (
+                        <span
+                          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full"
+                          style={{
+                            backgroundColor: matchScore >= 70 ? theme.primaryTint : theme.amberTint,
+                            color: matchScore >= 70 ? theme.primaryDark : theme.amber,
+                          }}
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          {matchScore}% de pertinence IA
+                        </span>
+                      )}
+
                       {job.duration && (
                         <span
-                          className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: theme.amberTint, color: theme.amber }}
+                          className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full ml-auto"
+                          style={{ backgroundColor: '#F3F4F6', color: theme.muted }}
                         >
                           <Clock className="w-3 h-3" />
                           {job.duration}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs font-medium flex flex-wrap items-center gap-x-3 gap-y-1" style={{ color: theme.muted }}>
-                      <span className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />{job.company_name}</span>
-                      <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{job.location || 'Non spécifié'}</span>
-                    </p>
+
+                    {/* Titre et Entreprise */}
+                    <div>
+                      <h2 className="sc-display text-base font-bold leading-snug" style={{ color: theme.ink }}>{job.title}</h2>
+                      <p className="text-xs font-medium flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ color: theme.muted }}>
+                        <span className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />{job.company_name}</span>
+                        <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{job.location || 'Non spécifié'}</span>
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="sc-divider mt-4 pt-4">
+                  {/* Badges de Compétences Requises */}
+                  {skillsList.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {skillsList.map((skill, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg flex items-center gap-1"
+                          style={{ backgroundColor: '#F0F2F1', color: theme.inkSoft }}
+                        >
+                          <Tag className="w-2.5 h-2.5 opacity-60" />
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  <div className="sc-divider pt-4">
                     <p className="text-xs leading-relaxed line-clamp-3" style={{ color: theme.inkSoft }}>{job.description}</p>
                   </div>
 
-                  <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${theme.border}` }}>
+                  {/* Bouton d'action */}
+                  <div className="pt-2" style={{ borderTop: `1px solid ${theme.border}` }}>
                     {hasApplied ? (
                       <div
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl"
@@ -200,10 +268,10 @@ const StudentJobs = () => {
                     ) : (
                       <button
                         onClick={() => setSelectedJob(job)}
-                        className="px-4 py-2 text-xs font-semibold rounded-xl transition cursor-pointer"
+                        className="px-4 py-2 text-xs font-semibold rounded-xl transition cursor-pointer hover:opacity-90"
                         style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
                       >
-                        Postuler
+                        Postuler à l'offre
                       </button>
                     )}
                   </div>
@@ -213,6 +281,7 @@ const StudentJobs = () => {
           </div>
         )}
 
+        {/* Modal pour Postuler */}
         {selectedJob && (
           <div className="fixed inset-0 flex justify-center items-center p-4 z-50" style={{ backgroundColor: 'rgba(18, 38, 33, 0.55)' }}>
             <div className="sc-fade-in bg-white rounded-2xl max-w-lg w-full overflow-hidden">
@@ -236,7 +305,7 @@ const StudentJobs = () => {
                     Importer votre CV (PDF) <span style={{ color: theme.amber }}>*</span>
                   </label>
                   <label
-                    className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-sm cursor-pointer transition"
+                    className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-sm cursor-pointer transition hover:bg-gray-50"
                     style={{ border: `1.5px dashed ${theme.border}`, backgroundColor: '#FAFBF9', color: theme.muted }}
                   >
                     <FileUp className="w-4 h-4 flex-shrink-0" />
@@ -261,7 +330,7 @@ const StudentJobs = () => {
                   <button
                     type="button"
                     onClick={() => { setSelectedJob(null); setCvFile(null); }}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold transition"
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer"
                     style={{ border: `1px solid ${theme.border}`, color: theme.inkSoft }}
                   >
                     Annuler
@@ -269,7 +338,7 @@ const StudentJobs = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2.5 text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center gap-2"
+                    className="px-5 py-2.5 text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                     style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
                   >
                     {submitting ? (

@@ -7,8 +7,12 @@ const authMiddleware = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
 // --- ROUTE ENTREPRISE (Mes offres) ---
-// ⚠️ À placer OBLIGATOIREMENT avant /:id
 router.get('/company/me', authMiddleware, jobController.getCompanyJobs);
+
+// --- 🌟 ROUTE ÉTUDIANT (Match IA & Recommandations) ---
+// ⚠️ OBLIGATOIREMENT avant /:id pour éviter le conflit d'URL !
+router.get('/student', authMiddleware, jobController.getStudentJobs); 
+// 💡 Si votre fonction est dans matchController, mettez : matchController.getStudentJobs
 
 // --- ROUTES PUBLIQUES ---
 router.get('/', jobController.getAllJobs);
@@ -22,6 +26,5 @@ router.get('/:jobId/match', authMiddleware, matchController.getMatchWithJob);
 router.post('/', authMiddleware, jobController.createJob);
 router.put('/:id', authMiddleware, jobController.updateJob);
 router.delete('/:id', authMiddleware, jobController.deleteJob);
-//affichage ds offres pour company
-router.get('/company/me', authMiddleware, jobController.getCompanyJobs);
+
 module.exports = router;

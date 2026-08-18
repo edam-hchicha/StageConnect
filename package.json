@@ -5,6 +5,7 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "mysql2": "^3.23.1",
-    "nodemailer": "^9.0.5"
+    "nodemailer": "^9.0.5",
+    "pdf-parse": "^2.4.5"
   }
 }
