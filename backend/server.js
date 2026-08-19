@@ -29,7 +29,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/profile', profileRoutes);
-
+app.use('/uploads', express.static('uploads'));
 // Route de santé
 app.get('/', (req, res) => {
   res.send('API StageConnect opérationnelle ! 🚀');
@@ -39,4 +39,3 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
 });
-app.use('/uploads', express.static('uploads'));

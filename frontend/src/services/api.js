@@ -58,10 +58,7 @@ export const updateJob = (id, jobData) => API.put(`/jobs/${id}`, jobData);
 export const deleteJob = (id) => API.delete(`/jobs/${id}`);
 
 // --- SERVICES CANDIDATURES ---
-export const applyToJob = (formData) =>
-  API.post('/applications', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+export const applyToJob = (data) => API.post('/applications', data);
 
 export const getStudentApplications = () => API.get('/applications/student');
 export const getCompanyApplications = () => API.get('/applications/company');

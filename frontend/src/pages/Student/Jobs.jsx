@@ -5,7 +5,7 @@ import {
   Search, MapPin, Clock, Sparkles, ClipboardList, Building2,
   CheckCircle2, FileUp, X, Send, Loader2, Tag, Percent
 } from 'lucide-react';
-
+import api, { applyToJob as applyToJobAPI } from '../../services/api';
 const theme = {
   canvas: '#F5F6F3',
   ink: '#122621',
@@ -79,35 +79,36 @@ const StudentJobs = () => {
     return matchesKeyword && matchesLocation;
   });
 
-  const handleApplySubmit = async (e) => {
-    e.preventDefault();
+const handleApplySubmit = async (e) => {
+  e.preventDefault();
+  
+  // 1. Extraction sécurisée de l'ID de l'offre (gère id, _id et job_id)
+  const targetJobId = selectedJob?.id || selectedJob?._id || selectedJob?.job_id;
 
-    if (!cvFile) {
-      alert('Veuillez joindre votre CV au format PDF.');
-      return;
-    }
+  if (!targetJobId) {
+    alert("Impossible de récupérer l'identifiant de cette offre.");
+    return;
+  }
 
-    setSubmitting(true);
-    try {
-      const formData = new FormData();
-      formData.append('job_id', selectedJob.id);
-      formData.append('cover_letter', coverLetter);
-      formData.append('cv', cvFile);
+  setSubmitting(true);
 
-      await applyToJob(formData);
-      alert('Candidature envoyée avec succès.');
+  try {
+    // 2. Envoi de la postulation
+    await applyToJobAPI({
+      jobId: targetJobId,
+      coverLetter: coverLetter
+    });
 
-      setAppliedJobIds([...appliedJobIds, selectedJob.id]);
-      setSelectedJob(null);
-      setCoverLetter('');
-      setCvFile(null);
-    } catch (err) {
-      alert(err.response?.data?.message || "Erreur lors de l'envoi de la candidature.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+    alert("Votre candidature a été envoyée avec succès !");
+    setSelectedJob(null); // Ferme la modale
+    setCoverLetter('');   // Réinitialise le champ
+  } catch (error) {
+    console.error("Erreur lors de la postulation :", error);
+    alert(error.response?.data?.message || "Erreur lors de l'envoi de la candidature.");
+  } finally {
+    setSubmitting(false);
+  }
+};
   return (
     <div className="min-h-screen" style={{ backgroundColor: theme.canvas, fontFamily: "'Inter', sans-serif" }}>
       <style>{`
@@ -300,21 +301,8 @@ const StudentJobs = () => {
               </div>
 
               <form onSubmit={handleApplySubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.inkSoft }}>
-                    Importer votre CV (PDF) <span style={{ color: theme.amber }}>*</span>
-                  </label>
-                  <label
-                    className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-sm cursor-pointer transition hover:bg-gray-50"
-                    style={{ border: `1.5px dashed ${theme.border}`, backgroundColor: '#FAFBF9', color: theme.muted }}
-                  >
-                    <FileUp className="w-4 h-4 flex-shrink-0" />
-                    {cvFile ? cvFile.name : 'Choisir un fichier PDF'}
-                    <input type="file" accept=".pdf" required onChange={(e) => setCvFile(e.target.files[0])} className="hidden" />
-                  </label>
-                </div>
-
-                <div>
+              
+               <div>
                   <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.inkSoft }}>Lettre de motivation (optionnelle)</label>
                   <textarea
                     rows="4"

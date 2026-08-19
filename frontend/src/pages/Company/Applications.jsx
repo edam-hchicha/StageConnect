@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getCompanyApplications, updateApplicationStatus } from '../../services/api';
-import { Mail, FileText, CalendarDays, Check, X, CheckCircle2, XCircle, Inbox } from 'lucide-react';
+import { Mail, FileText, CalendarDays, Check, X, CheckCircle2, XCircle, Inbox, Tag } from 'lucide-react';
 
 const theme = {
   canvas: '#F5F6F3',
@@ -39,10 +39,23 @@ const CompanyApplications = () => {
   const handleStatusChange = async (id, newStatus) => {
     try {
       await updateApplicationStatus(id, newStatus);
-      setApplications(applications.map((app) => (app.id === id ? { ...app, status: newStatus } : app)));
+      setApplications(applications.map((app) => {
+        const appId = app.application_id || app.id;
+        return appId === id ? { ...app, status: newStatus } : app;
+      }));
     } catch (err) {
       alert('Erreur lors de la modification du statut.');
     }
+  };
+
+  // ✅ Helper corrigé : Extrait uniquement le nom du fichier PDF pour reconstruire l'URL web
+  const formatCvUrl = (url) => {
+    if (!url) return '#';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    
+    // Extrait le nom du fichier peu importe le séparateur (/ ou \)
+    const fileName = url.split(/[/\\]/).pop();
+    return `http://localhost:5000/uploads/cvs/${fileName}`;
   };
 
   return (
@@ -74,88 +87,116 @@ const CompanyApplications = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {applications.map((app) => (
-              <div key={app.id} className="bg-white p-6 rounded-2xl space-y-4" style={{ border: `1px solid ${theme.border}` }}>
-                <div className="flex flex-wrap justify-between items-start gap-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-                      style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
-                    >
-                      {initials(app.first_name, app.last_name)}
+            {applications.map((app) => {
+              const appId = app.application_id || app.id;
+              const dateCreated = app.applied_at || app.created_at;
+
+              return (
+                <div key={appId} className="bg-white p-6 rounded-2xl space-y-4" style={{ border: `1px solid ${theme.border}` }}>
+                  <div className="flex flex-wrap justify-between items-start gap-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                        style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
+                      >
+                        {initials(app.first_name, app.last_name)}
+                      </div>
+                      <div>
+                        <h2 className="sc-display text-base font-bold" style={{ color: theme.ink }}>
+                          {app.first_name} {app.last_name}
+                        </h2>
+                        <p className="text-xs font-semibold" style={{ color: theme.primary }}>Offre : {app.job_title}</p>
+                        <p className="text-xs flex items-center gap-1.5 mt-0.5" style={{ color: theme.muted }}>
+                          <Mail className="w-3 h-3" /> {app.email}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="sc-display text-base font-bold" style={{ color: theme.ink }}>
-                        {app.first_name} {app.last_name}
-                      </h2>
-                      <p className="text-xs font-semibold" style={{ color: theme.primary }}>Offre : {app.job_title}</p>
-                      <p className="text-xs flex items-center gap-1.5 mt-0.5" style={{ color: theme.muted }}>
-                        <Mail className="w-3 h-3" /> {app.email}
+
+                    <span className="text-[11px] flex items-center gap-1.5" style={{ color: theme.muted }}>
+                      <CalendarDays className="w-3 h-3" />
+                      Reçu le {dateCreated ? new Date(dateCreated).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                    </span>
+                  </div>
+
+                  {/* Lettre de motivation */}
+                  {app.cover_letter && (
+                    <div className="p-3.5 rounded-xl text-sm leading-relaxed" style={{ backgroundColor: '#FAFBF9', border: `1px solid ${theme.border}`, color: theme.inkSoft }}>
+                      <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: theme.muted }}>
+                        Lettre de motivation
                       </p>
+                      {app.cover_letter}
                     </div>
-                  </div>
-
-                  <span className="text-[11px] flex items-center gap-1.5" style={{ color: theme.muted }}>
-                    <CalendarDays className="w-3 h-3" />
-                    Reçu le {new Date(app.created_at).toLocaleDateString('fr-FR')}
-                  </span>
-                </div>
-
-                {app.cover_letter && (
-                  <div className="p-3.5 rounded-xl text-sm leading-relaxed" style={{ backgroundColor: '#FAFBF9', border: `1px solid ${theme.border}`, color: theme.inkSoft }}>
-                    {app.cover_letter}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap justify-between items-center pt-3 gap-3" style={{ borderTop: `1px solid ${theme.border}` }}>
-                  {app.cv_url ? (
-                    <a
-                      href={`http://localhost:5000${app.cv_url}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition"
-                      style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      Consulter le CV (PDF)
-                    </a>
-                  ) : (
-                    <span className="text-xs" style={{ color: theme.muted }}>Aucun CV joint</span>
                   )}
 
-                  <div className="flex items-center gap-2">
-                    {app.status === 'accepted' ? (
-                      <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Candidature acceptée
-                      </span>
-                    ) : app.status === 'rejected' ? (
-                      <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: theme.dangerTint, color: theme.danger }}>
-                        <XCircle className="w-3.5 h-3.5" /> Candidature refusée
-                      </span>
+                  {/* Compétences extraites du profil */}
+                  {Array.isArray(app.skills) && app.skills.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <Tag className="w-3 h-3" style={{ color: theme.muted }} />
+                      {app.skills.map((skill, index) => (
+                        <span 
+                          key={index} 
+                          className="text-[11px] px-2 py-0.5 rounded-md font-medium"
+                          style={{ backgroundColor: '#F0F2EE', color: theme.inkSoft }}
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Actions et lien vers le CV */}
+                  <div className="flex flex-wrap justify-between items-center pt-3 gap-3" style={{ borderTop: `1px solid ${theme.border}` }}>
+                    {app.cv_url ? (
+                      <a
+                        href={formatCvUrl(app.cv_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition hover:opacity-90 cursor-pointer"
+                        style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Consulter le CV du profil (PDF)
+                      </a>
                     ) : (
-                      <>
-                        <button
-                          onClick={() => handleStatusChange(app.id, 'accepted')}
-                          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition cursor-pointer"
-                          style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          Accepter
-                        </button>
-                        <button
-                          onClick={() => handleStatusChange(app.id, 'rejected')}
-                          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition cursor-pointer"
-                          style={{ backgroundColor: theme.dangerTint, color: theme.danger }}
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          Refuser
-                        </button>
-                      </>
+                      <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">
+                        ⚠️ Aucun CV dans le profil
+                      </span>
                     )}
+
+                    <div className="flex items-center gap-2">
+                      {app.status === 'accepted' ? (
+                        <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}>
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Candidature acceptée
+                        </span>
+                      ) : app.status === 'rejected' ? (
+                        <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ backgroundColor: theme.dangerTint, color: theme.danger }}>
+                          <XCircle className="w-3.5 h-3.5" /> Candidature refusée
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleStatusChange(appId, 'accepted')}
+                            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition cursor-pointer hover:opacity-90"
+                            style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Accepter
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange(appId, 'rejected')}
+                            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition cursor-pointer hover:opacity-90"
+                            style={{ backgroundColor: theme.dangerTint, color: theme.danger }}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Refuser
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
