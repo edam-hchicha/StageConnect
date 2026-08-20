@@ -1,7 +1,7 @@
 const db = require('../config/db');
-const { sendApplicationResponseEmail } = require('../utils/sendEmail');
+const { sendApplicationResponseEmail } = require('../utils/applicationEmail');
 
-// 1. Postuler à une offre de stage (Récupération automatique du CV du profil)
+// 1. Postuler à une offre de stage
 exports.applyForJob = async (req, res) => {
   try {
     const userId = req.user?.profile_id || req.user?.id || req.user?.user_id;
@@ -16,7 +16,19 @@ exports.applyForJob = async (req, res) => {
       return res.status(400).json({ message: "L'identifiant de l'offre (jobId) est manquant." });
     }
 
-    // Récupérer le CV de l'étudiant depuis son profil
+    // 🔒 1.1 VÉRIFICATION : Bloquer si l'offre est déjà pourvue
+    const [acceptedApp] = await db.query(
+      "SELECT id FROM applications WHERE job_id = ? AND status = 'accepted'",
+      [jobId]
+    );
+
+    if (acceptedApp.length > 0) {
+      return res.status(400).json({ 
+        message: "Cette offre est désormais pourvue et fermée aux postulations." 
+      });
+    }
+
+    // 1.2 Récupérer le CV de l'étudiant
     const [students] = await db.query(
       'SELECT id, cv_url FROM student_profiles WHERE user_id = ? OR id = ?',
       [userId, userId]
@@ -31,7 +43,7 @@ exports.applyForJob = async (req, res) => {
     const student = students[0];
     const actualStudentId = student.id || userId;
 
-    // Vérifier si l'étudiant a déjà postulé
+    // 1.3 Vérifier si cet étudiant a déjà postulé
     const [existingApp] = await db.query(
       'SELECT id FROM applications WHERE student_id = ? AND job_id = ?',
       [actualStudentId, jobId]
@@ -41,7 +53,7 @@ exports.applyForJob = async (req, res) => {
       return res.status(400).json({ message: "Vous avez déjà postulé à cette offre." });
     }
 
-    // Insertion sécurisée dans la table 'applications'
+    // 1.4 Insertion dans la table 'applications'
     await db.query(
       `INSERT INTO applications (student_id, job_id, status, cover_letter, cv_url, created_at) 
        VALUES (?, ?, 'pending', ?, ?, NOW())`,
@@ -140,7 +152,7 @@ exports.getCompanyApplications = async (req, res) => {
   }
 };
 
-// 4. Mettre à jour le statut d'une candidature
+// 4. Mettre à jour le statut d'une candidature + Notification E-mail
 exports.updateApplicationStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -156,6 +168,7 @@ exports.updateApplicationStatus = async (req, res) => {
       return res.status(400).json({ message: "Statut invalide. Choisir : pending, accepted ou rejected." });
     }
 
+    // 1. Mise à jour du statut en base de données
     const [result] = await db.query(
       `UPDATE applications a
        JOIN jobs j ON a.job_id = j.id
@@ -168,13 +181,48 @@ exports.updateApplicationStatus = async (req, res) => {
       return res.status(404).json({ message: "Candidature non trouvée ou non autorisée." });
     }
 
+    // 2. Envoi de l'e-mail de notification
+    try {
+      if (status === 'accepted' || status === 'rejected') {
+        const [rows] = await db.query(
+          `SELECT 
+             u.email AS student_email, 
+             CONCAT(COALESCE(sp.first_name, ''), ' ', COALESCE(sp.last_name, '')) AS student_name,
+             j.title AS job_title, 
+             cp.company_name
+           FROM applications a
+           JOIN jobs j ON a.job_id = j.id
+           LEFT JOIN student_profiles sp ON (a.student_id = sp.id OR a.student_id = sp.user_id)
+           LEFT JOIN users u ON (sp.user_id = u.id OR a.student_id = u.id)
+           LEFT JOIN company_profiles cp ON (j.company_id = cp.id OR j.company_id = cp.user_id)
+           WHERE a.id = ?`,
+          [id]
+        );
+
+        if (rows.length > 0 && rows[0].student_email) {
+          const appInfo = rows[0];
+          sendApplicationResponseEmail({
+            studentEmail: appInfo.student_email,
+            studentName: appInfo.student_name.trim() || 'Étudiant',
+            jobTitle: appInfo.job_title || 'Offre de stage',
+            companyName: appInfo.company_name || 'L\'entreprise',
+            status: status
+          }).catch(err => console.error("⚠️ Erreur Nodemailer :", err.message));
+        }
+      }
+    } catch (emailErr) {
+      console.error("⚠️ Impossible d'envoyer l'e-mail de notification :", emailErr.message);
+    }
+
     return res.status(200).json({ message: `Le statut de la candidature est maintenant : ${status}` });
+
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error("🔴 Erreur updateApplicationStatus :", error);
+    return res.status(500).json({ message: "Erreur serveur lors de la mise à jour.", error: error.message });
   }
 };
 
-// 5. Répondre et notifier l'étudiant par e-mail
+// 5. Répondre avec précisions (date entretien/notes) + Notification E-mail
 exports.respondToApplication = async (req, res) => {
   try {
     const { id } = req.params;
@@ -184,14 +232,14 @@ exports.respondToApplication = async (req, res) => {
       `SELECT 
          a.id,
          u.email AS student_email, 
-         CONCAT(sp.first_name, ' ', sp.last_name) AS student_name,
+         CONCAT(COALESCE(sp.first_name, ''), ' ', COALESCE(sp.last_name, '')) AS student_name,
          j.title AS job_title, 
          cp.company_name
        FROM applications a
-       JOIN student_profiles sp ON (a.student_id = sp.id OR a.student_id = sp.user_id)
-       JOIN users u ON sp.user_id = u.id
        JOIN jobs j ON a.job_id = j.id
-       JOIN company_profiles cp ON (j.company_id = cp.id OR j.company_id = cp.user_id)
+       LEFT JOIN student_profiles sp ON (a.student_id = sp.id OR a.student_id = sp.user_id)
+       LEFT JOIN users u ON (sp.user_id = u.id OR a.student_id = u.id)
+       LEFT JOIN company_profiles cp ON (j.company_id = cp.id OR j.company_id = cp.user_id)
        WHERE a.id = ?`,
       [id]
     );
@@ -202,31 +250,29 @@ exports.respondToApplication = async (req, res) => {
 
     const app = rows[0];
 
-    // Mise à jour sécurisée du statut
     try {
       await db.query(
         'UPDATE applications SET status = ?, notes = ?, interview_date = ? WHERE id = ?',
         [status, notes || '', interviewDate || null, id]
       );
     } catch (dbErr) {
-      // Fallback au cas où les colonnes optionnelles 'notes' ou 'interview_date' n'existent pas
       await db.query(
         'UPDATE applications SET status = ? WHERE id = ?',
         [status, id]
       );
     }
 
-    // Envoi de l'e-mail de notification
-    if (typeof sendApplicationResponseEmail === 'function') {
-      await sendApplicationResponseEmail({
+    // Envoi de l'e-mail
+    if (app.student_email) {
+      sendApplicationResponseEmail({
         studentEmail: app.student_email,
-        studentName: app.student_name,
-        jobTitle: app.job_title,
-        companyName: app.company_name,
+        studentName: app.student_name.trim() || 'Étudiant',
+        jobTitle: app.job_title || 'Offre de stage',
+        companyName: app.company_name || 'L\'entreprise',
         status: status,
         interviewDate: interviewDate,
         notes: notes
-      });
+      }).catch(err => console.error("⚠️ Erreur Nodemailer :", err.message));
     }
 
     return res.status(200).json({ message: "Réponse enregistrée et candidat notifié par e-mail !" });

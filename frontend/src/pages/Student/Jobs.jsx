@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getStudentJobs, applyToJob, getStudentApplications } from '../../services/api';
+import { getStudentJobs, getStudentApplications, applyToJob as applyToJobAPI } from '../../services/api';
 import { Link } from 'react-router-dom';
 import {
   Search, MapPin, Clock, Sparkles, ClipboardList, Building2,
-  CheckCircle2, FileUp, X, Send, Loader2, Tag, Percent
+  CheckCircle2, X, Send, Loader2, Tag, AlertCircle
 } from 'lucide-react';
-import api, { applyToJob as applyToJobAPI } from '../../services/api';
+
 const theme = {
   canvas: '#F5F6F3',
   ink: '#122621',
@@ -27,7 +27,7 @@ const parseSkills = (skillsData) => {
     const parsed = JSON.parse(skillsData);
     if (Array.isArray(parsed)) return parsed;
   } catch {
-    // Si ce n'est pas du JSON, on découpe par virgule
+    // Si ce n'est pas du JSON, découpage par virgule
   }
   return String(skillsData).split(',').map((s) => s.trim()).filter(Boolean);
 };
@@ -40,15 +40,14 @@ const StudentJobs = () => {
 
   const [selectedJob, setSelectedJob] = useState(null);
   const [coverLetter, setCoverLetter] = useState('');
-  const [cvFile, setCvFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Charger les offres personnalisées par l'IA et les candidatures existantes
+  // Charger les offres (avec is_closed) et les candidatures de l'étudiant
   const fetchJobsAndApplications = async () => {
     setLoading(true);
     try {
       const [jobsRes, appsRes] = await Promise.all([
-        getStudentJobs(), // Utilise la route IA avec calcul de matchScore et tri
+        getStudentJobs(),
         getStudentApplications().catch(() => ({ data: [] })),
       ]);
       setJobs(jobsRes.data || []);
@@ -64,7 +63,7 @@ const StudentJobs = () => {
     fetchJobsAndApplications();
   }, []);
 
-  // Filtrage local dynamique réactif
+  // Filtrage local dynamique
   const filteredJobs = jobs.filter((job) => {
     const matchesKeyword =
       !search.keyword.trim() ||
@@ -79,36 +78,38 @@ const StudentJobs = () => {
     return matchesKeyword && matchesLocation;
   });
 
-const handleApplySubmit = async (e) => {
-  e.preventDefault();
-  
-  // 1. Extraction sécurisée de l'ID de l'offre (gère id, _id et job_id)
-  const targetJobId = selectedJob?.id || selectedJob?._id || selectedJob?.job_id;
+  const handleApplySubmit = async (e) => {
+    e.preventDefault();
+    
+    const targetJobId = selectedJob?.id || selectedJob?._id || selectedJob?.job_id;
 
-  if (!targetJobId) {
-    alert("Impossible de récupérer l'identifiant de cette offre.");
-    return;
-  }
+    if (!targetJobId) {
+      alert("Impossible de récupérer l'identifiant de cette offre.");
+      return;
+    }
 
-  setSubmitting(true);
+    setSubmitting(true);
 
-  try {
-    // 2. Envoi de la postulation
-    await applyToJobAPI({
-      jobId: targetJobId,
-      coverLetter: coverLetter
-    });
+    try {
+      await applyToJobAPI({
+        jobId: targetJobId,
+        coverLetter: coverLetter
+      });
 
-    alert("Votre candidature a été envoyée avec succès !");
-    setSelectedJob(null); // Ferme la modale
-    setCoverLetter('');   // Réinitialise le champ
-  } catch (error) {
-    console.error("Erreur lors de la postulation :", error);
-    alert(error.response?.data?.message || "Erreur lors de l'envoi de la candidature.");
-  } finally {
-    setSubmitting(false);
-  }
-};
+      alert("Votre candidature a été envoyée avec succès !");
+      setSelectedJob(null);
+      setCoverLetter('');
+      
+      // Actualise la liste après postulation
+      fetchJobsAndApplications();
+    } catch (error) {
+      console.error("Erreur lors de la postulation :", error);
+      alert(error.response?.data?.message || "Erreur lors de l'envoi de la candidature.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: theme.canvas, fontFamily: "'Inter', sans-serif" }}>
       <style>{`
@@ -149,7 +150,7 @@ const handleApplySubmit = async (e) => {
           </Link>
         </div>
 
-        {/* Barre de recherche et de filtres */}
+        {/* Barre de recherche */}
         <div className="flex flex-wrap gap-4 bg-white p-4 rounded-2xl" style={{ border: `1px solid ${theme.border}` }}>
           <div className="relative flex-1 min-w-[220px]">
             <Search className="w-4.5 h-4.5 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: theme.muted }} />
@@ -196,12 +197,15 @@ const handleApplySubmit = async (e) => {
                 <div
                   key={job.id}
                   className="sc-card bg-white rounded-2xl p-6 flex flex-col justify-between space-y-4"
-                  style={{ border: `1px solid ${theme.border}`, borderLeft: `4px solid ${theme.primary}` }}
+                  style={{ 
+                    border: `1px solid ${theme.border}`, 
+                    borderLeft: `4px solid ${job.is_closed ? theme.amber : theme.primary}` 
+                  }}
                 >
                   <div className="space-y-3">
                     {/* Badge Matching IA & Durée */}
                     <div className="flex justify-between items-center gap-2 flex-wrap">
-                      {matchScore > 0 && (
+                      {matchScore > 0 && !job.is_closed && (
                         <span
                           className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full"
                           style={{
@@ -235,7 +239,7 @@ const handleApplySubmit = async (e) => {
                     </div>
                   </div>
 
-                  {/* Badges de Compétences Requises */}
+                  {/* Compétences */}
                   {skillsList.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {skillsList.map((skill, idx) => (
@@ -256,9 +260,17 @@ const handleApplySubmit = async (e) => {
                     <p className="text-xs leading-relaxed line-clamp-3" style={{ color: theme.inkSoft }}>{job.description}</p>
                   </div>
 
-                  {/* Bouton d'action */}
+                  {/* Boutons d'actions et statuts */}
                   <div className="pt-2" style={{ borderTop: `1px solid ${theme.border}` }}>
-                    {hasApplied ? (
+                    {job.is_closed ? (
+                      <div
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl"
+                        style={{ backgroundColor: theme.amberTint, color: theme.amber }}
+                      >
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Offre pourvue / Expirée
+                      </div>
+                    ) : hasApplied ? (
                       <div
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl"
                         style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
@@ -292,7 +304,7 @@ const handleApplySubmit = async (e) => {
                   <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>{selectedJob.title} — {selectedJob.company_name}</p>
                 </div>
                 <button
-                  onClick={() => { setSelectedJob(null); setCvFile(null); }}
+                  onClick={() => setSelectedJob(null)}
                   className="w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer flex-shrink-0"
                   style={{ color: 'rgba(255,255,255,0.75)', backgroundColor: 'rgba(255,255,255,0.08)' }}
                 >
@@ -301,8 +313,7 @@ const handleApplySubmit = async (e) => {
               </div>
 
               <form onSubmit={handleApplySubmit} className="p-6 space-y-4">
-              
-               <div>
+                <div>
                   <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.inkSoft }}>Lettre de motivation (optionnelle)</label>
                   <textarea
                     rows="4"
@@ -317,7 +328,7 @@ const handleApplySubmit = async (e) => {
                 <div className="flex justify-end gap-3 pt-4" style={{ borderTop: `1px solid ${theme.border}` }}>
                   <button
                     type="button"
-                    onClick={() => { setSelectedJob(null); setCvFile(null); }}
+                    onClick={() => setSelectedJob(null)}
                     className="px-4 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer"
                     style={{ border: `1px solid ${theme.border}`, color: theme.inkSoft }}
                   >

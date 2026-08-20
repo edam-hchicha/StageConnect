@@ -17,16 +17,21 @@ const parseSkills = (skillsData) => {
   return String(skillsData).split(',').map(s => s.trim()).filter(Boolean);
 };
 
-// 1. Récupérer TOUTES les offres de stage (Public + Recherche & Filtres)
+// 1. Récupérer TOUTES les offres de stage (Public + Recherche & Filtres + Détection Offre Pourvue)
 exports.getAllJobs = async (req, res) => {
   try {
     const { keyword, location, city } = req.query;
     const searchLocation = location || city;
 
+    // Ajout de 'is_closed' pour détecter si un candidat a été accepté
     let sql = `
       SELECT j.*, 
              COALESCE(c.company_name, 'Entreprise') AS company_name, 
-             c.sector 
+             c.sector,
+             EXISTS(
+               SELECT 1 FROM applications a 
+               WHERE a.job_id = j.id AND a.status = 'accepted'
+             ) AS is_closed
       FROM jobs j 
       LEFT JOIN company_profiles c ON j.company_id = c.id 
       WHERE 1=1
@@ -47,9 +52,10 @@ exports.getAllJobs = async (req, res) => {
 
     const [jobs] = await db.query(sql, params);
 
-    // Formater les compétences pour chaque job
+    // Formater les compétences et convertir is_closed en booléen
     const formattedJobs = jobs.map(job => ({
       ...job,
+      is_closed: Boolean(job.is_closed),
       skills: parseSkills(job.skills)
     }));
 
@@ -60,7 +66,7 @@ exports.getAllJobs = async (req, res) => {
   }
 };
 
-// 2. Récupérer les offres triées par MATCHING IA pour l'étudiant connecté (Securisé contre l'erreur 500)
+// 2. Récupérer les offres triées par MATCHING IA pour l'étudiant connecté
 exports.getStudentJobs = async (req, res) => {
   try {
     const studentId = req.user?.profile_id || req.user?.id || req.user?.user_id;
@@ -71,11 +77,18 @@ exports.getStudentJobs = async (req, res) => {
       [studentId, studentId]
     );
 
-    // 2. Récupérer toutes les offres disponibles dans la BDD
-    const [jobs] = await db.query('SELECT * FROM jobs');
+    // 2. Récupérer toutes les offres avec leur statut d'acceptation
+    const [jobs] = await db.query(`
+      SELECT j.*,
+        EXISTS(
+          SELECT 1 FROM applications a 
+          WHERE a.job_id = j.id AND a.status = 'accepted'
+        ) AS is_closed
+      FROM jobs j
+    `);
 
     // Helper pour parser les compétences en toute sécurité
-    const parseSkills = (skills) => {
+    const parseSkillsLocal = (skills) => {
       if (Array.isArray(skills)) return skills;
       if (typeof skills === 'string') {
         try { return JSON.parse(skills); } catch (e) { return []; }
@@ -88,7 +101,8 @@ exports.getStudentJobs = async (req, res) => {
       console.log("⚠️ Aucun CV (cv_url) trouvé dans le profil étudiant.");
       const formattedJobs = jobs.map(job => ({
         ...job,
-        skills: parseSkills(job.skills),
+        is_closed: Boolean(job.is_closed),
+        skills: parseSkillsLocal(job.skills),
         matchScore: 0
       }));
       return res.status(200).json(formattedJobs);
@@ -98,7 +112,6 @@ exports.getStudentJobs = async (req, res) => {
 
     // 3. Résolution sécurisée du chemin du fichier CV et extraction du texte
     let cvText = "";
-    // Normalise les antislashs et supprime le slash de début pour path.resolve
     const cleanPath = student.cv_url.replace(/\\/g, '/').replace(/^\/+/, '');
     const fullCvPath = path.resolve(process.cwd(), cleanPath);
 
@@ -114,31 +127,30 @@ exports.getStudentJobs = async (req, res) => {
     }
 
     // Préparation des compétences de l'étudiant
-    const studentSkills = parseSkills(student.skills);
+    const studentSkills = parseSkillsLocal(student.skills);
 
-    // Objet étudiant prêt pour le calcul IA avec injection de cv_text
     const studentDataForIA = {
       ...student,
       skills: studentSkills,
       cv_text: cvText
     };
 
-    // 4. Calculer le score de matching IA pour CHAQUE offre disponible
+    // 4. Calculer le score de matching IA pour CHAQUE offre
     const scoredJobs = jobs.map(job => {
-      const jobSkills = parseSkills(job.skills);
+      const jobSkills = parseSkillsLocal(job.skills);
       const matchScore = calculateMatchScore(studentDataForIA, { ...job, skills: jobSkills });
 
       return {
         ...job,
+        is_closed: Boolean(job.is_closed),
         skills: jobSkills,
         matchScore
       };
     });
 
-    // 5. Trier automatiquement les offres de la plus compatible à la moins compatible
+    // 5. Trier automatiquement par score de compatibilité
     scoredJobs.sort((a, b) => b.matchScore - a.matchScore);
 
-    // Renvoyer les offres directement avec leurs scores
     return res.status(200).json(scoredJobs);
 
   } catch (error) {
@@ -149,6 +161,7 @@ exports.getStudentJobs = async (req, res) => {
     });
   }
 };
+
 // 3. Récupérer UNE SEULE offre par son ID (Public)
 exports.getJobById = async (req, res) => {
   try {
@@ -157,7 +170,11 @@ exports.getJobById = async (req, res) => {
       `SELECT j.*, 
               COALESCE(c.company_name, 'Entreprise') AS company_name, 
               c.sector, 
-              c.website 
+              c.website,
+              EXISTS(
+                SELECT 1 FROM applications a 
+                WHERE a.job_id = j.id AND a.status = 'accepted'
+              ) AS is_closed 
        FROM jobs j 
        LEFT JOIN company_profiles c ON j.company_id = c.id 
        WHERE j.id = ?`,
@@ -170,6 +187,7 @@ exports.getJobById = async (req, res) => {
 
     const job = {
       ...jobs[0],
+      is_closed: Boolean(jobs[0].is_closed),
       skills: parseSkills(jobs[0].skills)
     };
 
