@@ -8,66 +8,93 @@ exports.applyForJob = async (req, res) => {
     const jobId = req.body?.jobId || req.body?.job_id;
     const coverLetter = req.body?.coverLetter || req.body?.cover_letter || '';
 
-    if (!userId) {
-      return res.status(401).json({ message: "Utilisateur non authentifié." });
-    }
+    if (!userId) return res.status(401).json({ message: "Utilisateur non authentifié." });
+    if (!jobId) return res.status(400).json({ message: "L'identifiant de l'offre est manquant." });
 
-    if (!jobId) {
-      return res.status(400).json({ message: "L'identifiant de l'offre (jobId) est manquant." });
-    }
-
-    // 🔒 1.1 VÉRIFICATION : Bloquer si l'offre est déjà pourvue
+    // 1. Vérification : offre déjà pourvue
     const [acceptedApp] = await db.query(
       "SELECT id FROM applications WHERE job_id = ? AND status = 'accepted'",
       [jobId]
     );
-
     if (acceptedApp.length > 0) {
-      return res.status(400).json({ 
-        message: "Cette offre est désormais pourvue et fermée aux postulations." 
-      });
+      return res.status(400).json({ message: "Cette offre est désormais pourvue." });
     }
 
-    // 1.2 Récupérer le CV de l'étudiant
+    // 2. Récupérer les données de l’étudiant
     const [students] = await db.query(
-      'SELECT id, cv_url FROM student_profiles WHERE user_id = ? OR id = ?',
+      'SELECT id, cv_url, first_name, last_name FROM student_profiles WHERE user_id = ? OR id = ?',
       [userId, userId]
     );
-
     if (students.length === 0 || !students[0].cv_url) {
-      return res.status(400).json({ 
-        message: "Vous devez ajouter un CV dans votre profil avant de pouvoir postuler." 
-      });
+      return res.status(400).json({ message: "Vous devez ajouter un CV dans votre profil avant de pouvoir postuler." });
     }
 
     const student = students[0];
     const actualStudentId = student.id || userId;
 
-    // 1.3 Vérifier si cet étudiant a déjà postulé
+    // 3. Vérifier si l'étudiant a déjà postulé
     const [existingApp] = await db.query(
       'SELECT id FROM applications WHERE student_id = ? AND job_id = ?',
       [actualStudentId, jobId]
     );
-
     if (existingApp.length > 0) {
       return res.status(400).json({ message: "Vous avez déjà postulé à cette offre." });
     }
 
-    // 1.4 Insertion dans la table 'applications'
-    await db.query(
+    // 4. Insertion dans la table applications
+    const [result] = await db.query(
       `INSERT INTO applications (student_id, job_id, status, cover_letter, cv_url, created_at) 
        VALUES (?, ?, 'pending', ?, ?, NOW())`,
       [actualStudentId, jobId, coverLetter, student.cv_url]
     );
 
+    const applicationId = result.insertId;
+
+    // 🔔 5. CRÉATION DE LA NOTIFICATION POUR L'ENTREPRISE
+    const [jobRows] = await db.query(
+      `SELECT j.title AS job_title, j.company_id, cp.user_id AS company_user_id
+       FROM jobs j
+       LEFT JOIN company_profiles cp ON (j.company_id = cp.id OR j.company_id = cp.user_id)
+       WHERE j.id = ?`,
+      [jobId]
+    );
+
+    if (jobRows.length > 0) {
+      const companyUserId = jobRows[0].company_user_id || jobRows[0].company_id;
+      const jobTitle = jobRows[0].job_title || "Offre de stage";
+      const studentName = `${student.first_name || ''} ${student.last_name || ''}`.trim() || "Un étudiant";
+      
+      const notifTitle = "Nouvelle candidature reçue !";
+      const notifMsg = `${studentName} a postulé à votre offre : ${jobTitle}`;
+
+      // A) Sauvegarde en BDD
+      const [notifResult] = await db.query(
+        `INSERT INTO notifications (company_user_id, title, message, job_id, application_id, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [companyUserId, notifTitle, notifMsg, jobId, applicationId]
+      );
+
+      // B) Envoi en temps réel via Socket.io si l'entreprise est connectée
+      if (req.io) {
+        req.io.to(`company_${companyUserId}`).emit('new_notification', {
+          id: notifResult.insertId,
+          title: notifTitle,
+          message: notifMsg,
+          job_id: jobId,
+          application_id: applicationId,
+          is_read: 0,
+          created_at: new Date()
+        });
+      }
+    }
+
     return res.status(201).json({ message: "Votre candidature a été envoyée avec succès !" });
 
   } catch (error) {
     console.error("🔴 Erreur applyForJob :", error);
-    return res.status(500).json({ message: "Erreur serveur lors de la postulation.", error: error.message });
+    return res.status(500).json({ message: "Erreur serveur.", error: error.message });
   }
 };
-
 // 2. Récupérer les candidatures de l'étudiant connecté
 exports.getStudentApplications = async (req, res) => {
   try {

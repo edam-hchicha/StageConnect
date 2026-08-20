@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import NotificationBell from './NotificationBell'; // 🔔 Import du composant de notification
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -9,15 +10,17 @@ const Navbar = () => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role'); // 'student' ou 'company'
 
+  // Récupération sécurisée de l'identifiant utilisateur
+  const storedUser = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
+  const userId = storedUser?.id || localStorage.getItem('userId') || localStorage.getItem('user_id');
+
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
   };
 
-  // Fonction pour vérifier si le lien est actif
   const isActive = (path) => location.pathname === path;
 
-  // Style dynamique des liens
   const linkClasses = (path) => `
     flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-150
     ${isActive(path) 
@@ -81,6 +84,8 @@ const Navbar = () => {
                     <Link to="/company/applications" className={linkClasses('/company/applications')}>
                       <span>📥</span> Candidatures Reçues
                     </Link>
+                    {/* 🔔 CLOCHE DE NOTIFICATION ENTREPRISE */}
+                    <NotificationBell companyUserId={userId} token={token} />
                   </>
                 )}
 
@@ -104,7 +109,12 @@ const Navbar = () => {
           </nav>
 
           {/* 🟢 BOUTON MENU MOBILE */}
-          <div className="md:hidden flex items-center">
+          <div className="md:hidden flex items-center gap-2">
+            {/* 🔔 CLOCHE MOBILE POUR ENTREPRISE */}
+            {token && role === 'company' && (
+              <NotificationBell companyUserId={userId} token={token} />
+            )}
+
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
