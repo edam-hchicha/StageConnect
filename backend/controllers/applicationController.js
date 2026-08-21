@@ -132,6 +132,7 @@ exports.getCompanyApplications = async (req, res) => {
         a.id AS application_id,
         a.job_id,
         a.cover_letter,
+        u.id AS student_user_id,
         a.status,
         a.created_at AS applied_at,
         j.title AS job_title,

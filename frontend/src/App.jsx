@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
-
+import ChatPage from './pages/ChatPage'; // 👈 Import manquant à ajouter
 
 // Pages Étudiant
 import StudentJobs from './pages/Student/Jobs';
@@ -49,6 +49,7 @@ function App() {
             <Route path="/company/jobs" element={<CompanyJobs />} />
             <Route path="/company/applications" element={<CompanyApplications />} /> {/* 👈 2. Nouvelle route Entreprise */}
             <Route path="/profile" element={<Profile />} />
+            <Route path="/chat" element={<ChatPage />} />          
           </Routes>
         </main>
       </div>

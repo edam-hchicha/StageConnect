@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // 🟢 Import useNavigate
 import { getCompanyApplications, updateApplicationStatus } from '../../services/api';
-import { Mail, FileText, CalendarDays, Check, X, CheckCircle2, XCircle, Inbox, Tag } from 'lucide-react';
+import { Mail, FileText, CalendarDays, Check, X, CheckCircle2, XCircle, Inbox, Tag, MessageSquare } from 'lucide-react'; // 🟢 Import MessageSquare
 
 const theme = {
   canvas: '#F5F6F3',
@@ -18,6 +19,7 @@ const theme = {
 const initials = (first, last) => `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase();
 
 const CompanyApplications = () => {
+  const navigate = useNavigate(); // 🟢 Initialisation du hook
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,12 +50,10 @@ const CompanyApplications = () => {
     }
   };
 
-  // ✅ Helper corrigé : Extrait uniquement le nom du fichier PDF pour reconstruire l'URL web
   const formatCvUrl = (url) => {
     if (!url) return '#';
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
     
-    // Extrait le nom du fichier peu importe le séparateur (/ ou \)
     const fileName = url.split(/[/\\]/).pop();
     return `http://localhost:5000/uploads/cvs/${fileName}`;
   };
@@ -90,6 +90,7 @@ const CompanyApplications = () => {
             {applications.map((app) => {
               const appId = app.application_id || app.id;
               const dateCreated = app.applied_at || app.created_at;
+              const studentUserId = app.student_user_id || app.user_id || app.student_id;
 
               return (
                 <div key={appId} className="bg-white p-6 rounded-2xl space-y-4" style={{ border: `1px solid ${theme.border}` }}>
@@ -144,24 +145,52 @@ const CompanyApplications = () => {
                     </div>
                   )}
 
-                  {/* Actions et lien vers le CV */}
+                  {/* Actions, CV et Tchat */}
                   <div className="flex flex-wrap justify-between items-center pt-3 gap-3" style={{ borderTop: `1px solid ${theme.border}` }}>
-                    {app.cv_url ? (
-                      <a
-                        href={formatCvUrl(app.cv_url)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition hover:opacity-90 cursor-pointer"
-                        style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Consulter le CV du profil (PDF)
-                      </a>
-                    ) : (
-                      <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">
-                        ⚠️ Aucun CV dans le profil
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Lien CV */}
+                      {app.cv_url ? (
+                        <a
+                          href={formatCvUrl(app.cv_url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition hover:opacity-90 cursor-pointer"
+                          style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Consulter le CV (PDF)
+                        </a>
+                      ) : (
+                        <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">
+                          ⚠️ Aucun CV
+                        </span>
+                      )}
+
+                      {/* 💬 BOUTON CONTACTER (Ouvre la page Chat avec l'étudiant) */}
+                     <button
+  onClick={() => {
+    const studentUserId = app.student_user_id || app.user_id;
+    const fullName = `${app.first_name || ''} ${app.last_name || ''}`.trim();
+
+    if (!studentUserId) {
+      alert("⚠️ Impossible de trouver l'ID utilisateur de cet étudiant.");
+      return;
+    }
+
+    navigate('/chat', { 
+      state: { 
+        receiverId: studentUserId, 
+        receiverName: fullName || app.email 
+      } 
+    });
+  }}
+  className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition hover:opacity-90 cursor-pointer"
+  style={{ backgroundColor: theme.primaryTint, color: theme.primaryDark }}
+>
+  <MessageSquare className="w-3.5 h-3.5" />
+  Contacter
+</button>
+                    </div>
 
                     <div className="flex items-center gap-2">
                       {app.status === 'accepted' ? (

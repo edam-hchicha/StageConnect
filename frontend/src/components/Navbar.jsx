@@ -173,7 +173,10 @@ const Navbar = () => {
               <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className={linkClasses('/profile')}>
                 👤 Mon Profil
               </Link>
-
+              <Link to="/chat" className={linkClasses('/chat')}>
+               <span>💬</span> Messagerie
+              </Link>
+              
               <button
                 onClick={() => {
                   setIsMobileMenuOpen(false);

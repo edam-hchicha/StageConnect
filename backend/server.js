@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const cors = require('cors');
+const messageRoutes = require('./routes/messageRoutes');
 require('dotenv').config();
 
 // Connexion BDD
@@ -63,7 +64,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/notifications', notificationRoutes);
-
+app.use('/api/messages', messageRoutes);
 // Route de santé
 app.get('/', (req, res) => {
   res.send('API StageConnect opérationnelle ! 🚀');
@@ -74,4 +75,10 @@ const PORT = process.env.PORT || 5000;
 // Utilisation de server.listen (au lieu d'app.listen) pour que Socket.io fonctionne
 server.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
+});
+io.on('connection', (socket) => {
+  socket.on('join_user_room', (userId) => {
+    socket.join(`user_${userId}`);
+    console.log(`👤 Utilisateur ${userId} a rejoint la room user_${userId}`);
+  });
 });
