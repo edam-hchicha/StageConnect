@@ -92,6 +92,11 @@ const Navbar = () => {
                 {/* SÉPARATEUR */}
                 <div className="h-5 w-px bg-slate-200 mx-2" />
 
+                {/* 💬 MESSAGERIE (AJOUTÉ POUR DESKTOP) */}
+                <Link to="/chat" className={linkClasses('/chat')}>
+                  <span>💬</span> Messagerie
+                </Link>
+
                 {/* PROFIL */}
                 <Link to="/profile" className={linkClasses('/profile')}>
                   <span>👤</span> Mon Profil
@@ -110,7 +115,6 @@ const Navbar = () => {
 
           {/* 🟢 BOUTON MENU MOBILE */}
           <div className="md:hidden flex items-center gap-2">
-            {/* 🔔 CLOCHE MOBILE POUR ENTREPRISE */}
             {token && role === 'company' && (
               <NotificationBell companyUserId={userId} token={token} />
             )}
@@ -170,11 +174,12 @@ const Navbar = () => {
                 </>
               )}
 
-              <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className={linkClasses('/profile')}>
-                👤 Mon Profil
+              <Link to="/chat" onClick={() => setIsMobileMenuOpen(false)} className={linkClasses('/chat')}>
+                <span>💬</span> Messagerie
               </Link>
-              <Link to="/chat" className={linkClasses('/chat')}>
-               <span>💬</span> Messagerie
+
+              <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className={linkClasses('/profile')}>
+                <span>👤</span> Mon Profil
               </Link>
               
               <button

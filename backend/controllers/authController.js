@@ -1,7 +1,7 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const sendVerificationEmail = require('../utils/sendEmail');
+const { sendVerificationEmail } = require('../utils/sendEmail');
 
 // 1. INSCRIPTION (Register) - Gestion des réexpéditions si le compte n'est pas encore vérifié
 exports.register = async (req, res) => {

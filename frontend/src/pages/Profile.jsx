@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, GraduationCap, Building2, CheckCircle2, AlertCircle, Save, Loader2 } from 'lucide-react';
+import { Mail, GraduationCap, Building2, CheckCircle2, AlertCircle, Save, Loader2, FileText, Upload } from 'lucide-react';
 import API from '../services/api';
 
 const theme = {
@@ -30,6 +30,7 @@ const Profile = () => {
   const [userData, setUserData] = useState({ email: '', role: '', profile: {} });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingCv, setUploadingCv] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', message: '' });
 
   useEffect(() => {
@@ -51,6 +52,37 @@ const Profile = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setUserData((prev) => ({ ...prev, profile: { ...prev.profile, [name]: value } }));
+  };
+
+  // 🟢 FONCTION DE TÉLÉVERSEMENT DU CV EN TEMPS RÉEL
+  const handleCvUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadingCv(true);
+    setFeedback({ type: '', message: '' });
+
+    const formData = new FormData();
+    formData.append('cv', file);
+
+    try {
+      const res = await API.post('/profile/upload-cv', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      // Mise à jour locale de l'URL du CV
+      setUserData((prev) => ({
+        ...prev,
+        profile: { ...prev.profile, cv_url: res.data.cv_url }
+      }));
+
+      setFeedback({ type: 'success', message: 'CV mis à jour avec succès !' });
+    } catch (err) {
+      console.error('Erreur upload CV :', err);
+      setFeedback({ type: 'error', message: "Erreur lors de l'envoi du CV (PDF uniquement, max 5 Mo)." });
+    } finally {
+      setUploadingCv(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -189,6 +221,39 @@ const Profile = () => {
                   <Field label="Compétences techniques" span>
                     <textarea name="skills" rows="3" value={userData.profile?.skills || ''} onChange={handleChange} placeholder="Ex: React.js, Node.js, Express, MySQL, Tailwind CSS, Git"
                       className="sc-input w-full px-4 py-2.5 rounded-xl text-sm transition resize-none" style={inputStyle} />
+                  </Field>
+
+                  {/* 🟢 BLOC DÉDIÉ AU NIVEAU DU CV ÉTUDIANT */}
+                  <Field label="Curriculum Vitae (CV)" span>
+                    <div className="p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" style={{ backgroundColor: theme.canvas, border: `1px solid ${theme.border}` }}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-lg" style={{ backgroundColor: theme.primaryTint, color: theme.primary }}>
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          {userData.profile?.cv_url ? (
+                            <a
+                              href={`http://localhost:5000${userData.profile.cv_url}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sm font-semibold hover:underline flex items-center gap-1"
+                              style={{ color: theme.primary }}
+                            >
+                              Visualiser mon CV actuel ↗
+                            </a>
+                          ) : (
+                            <p className="text-sm font-medium" style={{ color: theme.muted }}>Aucun CV déposé</p>
+                          )}
+                          <p className="text-xs mt-0.5" style={{ color: theme.muted }}>Format PDF uniquement (Max 5 Mo)</p>
+                        </div>
+                      </div>
+
+                      <label className="px-4 py-2 text-xs font-semibold rounded-xl cursor-pointer transition flex items-center gap-2 border shadow-xs" style={{ backgroundColor: '#FFFFFF', borderColor: theme.border, color: theme.inkSoft }}>
+                        {uploadingCv ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        {userData.profile?.cv_url ? 'Remplacer le CV' : 'Ajouter un CV'}
+                        <input type="file" accept=".pdf" onChange={handleCvUpload} className="hidden" disabled={uploadingCv} />
+                      </label>
+                    </div>
                   </Field>
                 </>
               )}

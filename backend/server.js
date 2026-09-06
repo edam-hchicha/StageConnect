@@ -57,6 +57,18 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 
+// 🔍 DIAGNOSTIC TEMPORAIRE : vérifier que chaque route est bien une fonction
+// (à retirer une fois le bug corrigé)
+console.log('--- Vérification des routes ---');
+console.log('authRoutes:', typeof authRoutes);
+console.log('userRoutes:', typeof userRoutes);
+console.log('jobRoutes:', typeof jobRoutes);
+console.log('applicationRoutes:', typeof applicationRoutes);
+console.log('profileRoutes:', typeof profileRoutes);
+console.log('notificationRoutes:', typeof notificationRoutes);
+console.log('messageRoutes:', typeof messageRoutes);
+console.log('--------------------------------');
+
 // Déclaration des endpoints API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -65,6 +77,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages', messageRoutes);
+
 // Route de santé
 app.get('/', (req, res) => {
   res.send('API StageConnect opérationnelle ! 🚀');
@@ -76,6 +89,7 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
 });
+
 io.on('connection', (socket) => {
   socket.on('join_user_room', (userId) => {
     socket.join(`user_${userId}`);
